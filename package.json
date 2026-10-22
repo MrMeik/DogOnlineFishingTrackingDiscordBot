@@ -1,0 +1,26 @@
+{
+  "name": "dogonline-fishing-tracking",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Discord Bot for tracking fishing in DogOnline.net",
+  "main": "app.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.x"
+  },
+  "scripts": {
+    "start": "node fishBot.js",
+    "dev": "nodemon fishBot.js"
+  },
+  "author": "MrMeik",
+  "license": "MIT",
+  "dependencies": {
+    "discord-interactions": "^4.0.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "googleapis": "^187.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^1.14.10"
+  }
+}

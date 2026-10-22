@@ -1,0 +1,11 @@
+export const ACT_LOCATION = "loc";
+export const ACT_BAIT = "bait";
+export const ACT_TIME = "time";
+export const ACT_WEATHER = "weather";
+export const ACT_NEXT = "next";
+export const ACT_BACK = "back";
+export const ACT_PICK = "pick";
+export const ACT_UNDO = "undo";
+export const ACT_SUBMIT = "submit";
+export const ACT_CANCEL = "cancel";
+export const ACT_DELETE = "delete";
