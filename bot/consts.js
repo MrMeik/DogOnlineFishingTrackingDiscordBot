@@ -5,6 +5,9 @@ const opts = (...names) => names.map((n) => ({ label: n, value: slug(n) }));
 // safety cap so the message never outgrows Discord's limits on display
 export const MAX_CATCH = 100;
 
+export const ENUM_FISH = "fish";
+export const ENUM_MISC = "misc";
+
 export const TIMES = opts("Morning", "Afternoon", "Evening", "Night");
 export const WEATHER = opts("Clear Skies", "Rainy", "Stormy", "Snowy");
 
@@ -95,6 +98,26 @@ const SKY_FISH = opts(
   "Skyfish",
   "Extraterrestrial Octopus",
   "Jellyfish...?",
+);
+
+export const MISC_ITEMS = opts(
+  "Ancient Armor",
+  "Clothes Token",
+  "Cold Boot",
+  "Eyepatch",
+  "Food Token",
+  "Freaky Token",
+  "Gold Boot",
+  "Island Song",
+  "Old Boot",
+  "Pirate Hat",
+  "Reading Token",
+  "Seaweed",
+  "Sub Sandwich",
+  "Water Bucket",
+  "Weapons Token",
+  "Ancient Katana",
+  "Swede",
 );
 
 export const LOCATIONS = {

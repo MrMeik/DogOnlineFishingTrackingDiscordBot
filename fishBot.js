@@ -6,7 +6,14 @@ import {
   verifyKeyMiddleware,
   InteractionResponseFlags,
 } from "discord-interactions";
-import { LOCATIONS, TIMES, WEATHER, MAX_CATCH } from "./bot/consts.js";
+import {
+  LOCATIONS,
+  TIMES,
+  WEATHER,
+  MAX_CATCH,
+  ENUM_FISH,
+  ENUM_MISC,
+} from "./bot/consts.js";
 import { appendFishingLogs, revokeFishingLogs } from "./bot/google-calls.js";
 import {
   createCommand,
@@ -29,32 +36,23 @@ import {
   ACT_WEATHER,
   ACT_NEXT,
   ACT_BACK,
-  ACT_PICK,
+  ACT_FISH,
   ACT_UNDO,
   ACT_SUBMIT,
   ACT_CANCEL,
   ACT_DELETE,
+  ACT_MISC,
 } from "./bot/actions.js";
+
+import {
+  createNewSession,
+  getSession,
+  getTotalCaught,
+  deleteSession,
+} from "./bot/session-data.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-// ---------------------------------------------------------------------------
-// I should have used typescript
-// sid -> { userId, userName, location, bait, time, weather, catches: [.. fish ..], createdAt }
-// ---------------------------------------------------------------------------
-const sessions = new Map();
-
-setInterval(
-  () => {
-    const cutoff = Date.now() - SESSION_TTL_MS;
-    for (const [sid, s] of sessions)
-      if (s.createdAt < cutoff) sessions.delete(sid);
-  },
-  5 * 60 * 1000,
-).unref();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -112,22 +110,11 @@ app.post(
       if (interaction.type === InteractionType.APPLICATION_COMMAND) {
         if (interaction.data.name === COMMAND_NAME) {
           const sid = interaction.id;
-          const session = {
-            userId: getUserId(interaction),
-            userName: getUserName(interaction),
-            location: null,
-            bait: null,
-            time: null,
-            weather: null,
-            catches: [],
-            createdAt: Date.now(),
-          };
-          sessions.set(sid, session);
-
-          console.log("Creating session: ", {
-            ...session,
-          });
-
+          const session = createNewSession(
+            sid,
+            getUserId(interaction),
+            getUserName(interaction),
+          );
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
@@ -142,7 +129,6 @@ app.post(
       if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
         const [action, sid, publicMessageId = null] =
           interaction.data.custom_id.split(":");
-        const session = sessions.get(sid);
 
         if (action == ACT_DELETE) {
           // Remove logs associated with the catch
@@ -161,6 +147,8 @@ app.post(
           );
         }
 
+        const session = getSession(sid);
+
         if (!session) {
           return res.send(
             updateMessage({
@@ -169,6 +157,7 @@ app.post(
             }),
           );
         }
+
         if (session.userId !== getUserId(interaction)) {
           return res.send(ephemeralMessage("This isn't your fishing log."));
         }
@@ -232,13 +221,21 @@ app.post(
               updateMessage(renderConditionSelection(sid, session)),
             );
           }
-          case ACT_PICK: {
+          case ACT_FISH: {
             // Selecting a fish
             const valid = LOCATIONS[session.location].fish.some(
               (f) => f.value === value,
             );
-            if (valid && session.catches.length < MAX_CATCH)
-              session.catches.push(value);
+            if (valid && getTotalCaught(session) < MAX_CATCH)
+              session.catches.push({ type: ENUM_FISH, value: value });
+            return res.send(updateMessage(renderFishLogging(sid, session)));
+          }
+          case ACT_MISC: {
+            // Selecting a misc item
+            if (getTotalCaught(session) < MAX_CATCH) {
+              session.catches.push({ type: ENUM_MISC, value: value });
+            }
+
             return res.send(updateMessage(renderFishLogging(sid, session)));
           }
           case ACT_UNDO: {
@@ -255,12 +252,12 @@ app.post(
             const channelId = interaction.channel_id ?? interaction.channel?.id;
             const publicMessageId = await postLogToChannel(channelId, session);
 
-            sessions.delete(sid);
+            deleteSession(sid);
 
             return res.send(updateMessage(renderEndCard(sid, publicMessageId)));
           }
           case ACT_CANCEL: {
-            sessions.delete(sid);
+            deleteSession(sid);
 
             console.log("Cancelling session: ", {
               ...session,

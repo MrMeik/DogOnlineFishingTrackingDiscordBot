@@ -42,7 +42,7 @@ export async function appendFishingLogs(sessionId, session) {
     const logs = session.catches.map((fish) => [
       `'${sessionId}`, // force this to be text
       session.userName,
-      fish,
+      fish.value, // TODO: Decide if the caught misc. items should go elsewhere
       session.location,
       session.time,
       session.weather,

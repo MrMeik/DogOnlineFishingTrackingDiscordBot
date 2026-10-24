@@ -5,6 +5,8 @@ import {
   WEATHER,
   LOCATION_OPTIONS,
   MAX_CATCH,
+  MISC_ITEMS,
+  ENUM_FISH,
 } from "./consts.js";
 import {
   ACT_LOCATION,
@@ -13,28 +15,34 @@ import {
   ACT_WEATHER,
   ACT_NEXT,
   ACT_BACK,
-  ACT_PICK,
+  ACT_FISH,
+  ACT_MISC,
   ACT_UNDO,
   ACT_SUBMIT,
   ACT_CANCEL,
   ACT_DELETE,
 } from "./actions.js";
 import { MessageComponentTypes } from "discord-interactions";
+import { getTotalCaught } from "./session-data.js";
 
 const { ACTION_ROW, BUTTON, STRING_SELECT } = MessageComponentTypes;
 
 const labelOf = (list, value) => list.find((o) => o.value === value)?.label;
 
-function getTotal(catches) {
+function aggregateCaughtList(catches) {
   const counts = {};
-  for (const v of catches) counts[v] = (counts[v] ?? 0) + 1;
+  for (const c of catches) counts[c.value] = (counts[c.value] ?? 0) + 1;
   return counts;
 }
 
-function formatTotal(session) {
+function formatCaughtList(session) {
   const fishList = LOCATIONS[session.location].fish;
-  return Object.entries(getTotal(session.catches))
-    .map(([value, n]) => `• ${labelOf(fishList, value)} ×${n}`)
+
+  // There are multiple types of things that can be caught [fish, misc]
+  const aggrList = [...fishList, ...MISC_ITEMS];
+
+  return Object.entries(aggregateCaughtList(session.catches))
+    .map(([c, n]) => `• ${labelOf(aggrList, c)} ×${n}`)
     .join("\n");
 }
 
@@ -48,14 +56,15 @@ function conditionsSummary(s) {
   ].join("\n");
 }
 
-export function formatFullSummary(s) {
-  const logged = s.catches.length;
+export function formatFullSummary(session) {
+  const logged = getTotalCaught(session);
   const summary = logged
-    ? formatTotal(s)
+    ? formatCaughtList(session)
     : "_Nothing logged yet — pick your first catch below._";
 
   return (
-    `_ _\n${conditionsSummary(s)}\n\n` + `**Catches (${logged}):**\n${summary}`
+    `_ _\n${conditionsSummary(session)}\n\n` +
+    `**Catches (${logged}):**\n${summary}`
   );
 }
 
@@ -66,13 +75,13 @@ export const baitOptionsFor = (locationKey) =>
 const withDefault = (options, selected) =>
   options.map((o) => ({ ...o, default: o.value === selected }));
 
-export const conditionsComplete = (s) =>
-  s.location && s.bait && s.time && s.weather;
+export const conditionsComplete = (session) =>
+  session.location && session.bait && session.time && session.weather;
 
 // ==== UI rendeing ====
 
 // Used to render the first stage of the bot's questions (to determine place, bait, time of day and weather)
-export function renderConditionSelection(sid, s) {
+export function renderConditionSelection(sid, session) {
   return {
     components: [
       {
@@ -82,7 +91,7 @@ export function renderConditionSelection(sid, s) {
             type: STRING_SELECT,
             custom_id: `${ACT_LOCATION}:${sid}`,
             placeholder: "Where were you fishing?",
-            options: withDefault(LOCATION_OPTIONS, s.location),
+            options: withDefault(LOCATION_OPTIONS, session.location),
           },
         ],
       },
@@ -92,11 +101,14 @@ export function renderConditionSelection(sid, s) {
           {
             type: STRING_SELECT,
             custom_id: `${ACT_BAIT}:${sid}`,
-            placeholder: s.location
+            placeholder: session.location
               ? "What bait did you use?"
               : "Pick a location first...",
-            options: withDefault(baitOptionsFor(s.location), s.bait),
-            disabled: !s.location,
+            options: withDefault(
+              baitOptionsFor(session.location),
+              session.bait,
+            ),
+            disabled: !session.location,
           },
         ],
       },
@@ -107,7 +119,7 @@ export function renderConditionSelection(sid, s) {
             type: STRING_SELECT,
             custom_id: `${ACT_TIME}:${sid}`,
             placeholder: "Time of day?",
-            options: withDefault(TIMES, s.time),
+            options: withDefault(TIMES, session.time),
           },
         ],
       },
@@ -118,7 +130,7 @@ export function renderConditionSelection(sid, s) {
             type: STRING_SELECT,
             custom_id: `${ACT_WEATHER}:${sid}`,
             placeholder: "Weather?",
-            options: withDefault(WEATHER, s.weather),
+            options: withDefault(WEATHER, session.weather),
           },
         ],
       },
@@ -136,7 +148,7 @@ export function renderConditionSelection(sid, s) {
             custom_id: `${ACT_NEXT}:${sid}`,
             style: 1,
             label: "Next: log catches",
-            disabled: !conditionsComplete(s),
+            disabled: !conditionsComplete(session),
           },
         ],
       },
@@ -145,21 +157,35 @@ export function renderConditionSelection(sid, s) {
 }
 
 // Used to render second stage where user inputs fish caught during process
-export function renderFishLogging(sid, s) {
-  const logged = s.catches.length;
+export function renderFishLogging(sid, session) {
+  const logged = getTotalCaught(session);
   const full = logged >= MAX_CATCH;
 
   return {
-    content: formatFullSummary(s),
+    content: formatFullSummary(session),
     components: [
       {
+        // Pick a fish
         type: ACTION_ROW,
         components: [
           {
             type: STRING_SELECT,
-            custom_id: `${ACT_PICK}:${sid}`,
-            placeholder: full ? "Catch limit reached" : "Add a catch...",
-            options: LOCATIONS[s.location].fish, // no defaults, so it resets after each pick
+            custom_id: `${ACT_FISH}:${sid}`,
+            placeholder: full ? "Catch limit reached" : "Add a fish...",
+            options: LOCATIONS[session.location].fish, // no defaults, so it resets after each pick
+            disabled: full,
+          },
+        ],
+      },
+      {
+        // Pick a misc. item
+        type: ACTION_ROW,
+        components: [
+          {
+            type: STRING_SELECT,
+            custom_id: `${ACT_MISC}:${sid}`,
+            placeholder: full ? "Catch limit reached" : "Add a non fish...",
+            options: MISC_ITEMS, // no defaults, so it resets after each pick
             disabled: full,
           },
         ],
